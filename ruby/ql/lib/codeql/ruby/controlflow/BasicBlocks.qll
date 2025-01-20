@@ -4,7 +4,6 @@ private import codeql.ruby.AST
 private import codeql.ruby.ast.internal.AST
 private import codeql.ruby.ast.internal.TreeSitter
 private import codeql.ruby.controlflow.ControlFlowGraph
-private import internal.ControlFlowGraphImpl
 private import CfgNodes
 private import SuccessorTypes
 
@@ -252,6 +251,30 @@ private module Cached {
     cfn.isJoin()
     or
     cfn.getAPredecessor().isBranch()
+    or
+    /*
+     * In cases such as
+     *
+     * ```rb
+     * if x or y
+     *     foo
+     * else
+     *     bar
+     * ```
+     *
+     * we have a CFG that looks like
+     *
+     * x --false--> [false] x or y --false--> bar
+     * \                    |
+     *  --true--> y --false--
+     *            \
+     *             --true--> [true] x or y --true--> foo
+     *
+     * and we want to ensure that both `foo` and `bar` start a new basic block,
+     * in order to get a `ConditionalBlock` out of the disjunction.
+     */
+
+    exists(cfn.getAPredecessor(any(SuccessorTypes::ConditionalSuccessor s)))
   }
 
   /**
@@ -366,7 +389,7 @@ private module JoinBlockPredecessors {
   private predicate idOf(Ruby::AstNode x, int y) = equivalenceRelation(id/2)(x, y)
 
   int getId(JoinBlockPredecessor jbp) {
-    idOf(toGeneratedInclSynth(jbp.getFirstNode().(AstCfgNode).getNode()), result)
+    idOf(toGeneratedInclSynth(jbp.getFirstNode().(AstCfgNode).getAstNode()), result)
     or
     idOf(toGeneratedInclSynth(jbp.(EntryBasicBlock).getScope()), result)
   }

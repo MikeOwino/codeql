@@ -117,8 +117,6 @@ The values of the contained expressions need to be of :ref:`compatible types <ty
 Furthermore, at least one of the set elements has to be of a type that is a supertype of the types of all
 the other contained expressions.
 
-Set literals are supported from release 2.1.0 of the CodeQL CLI, and release 1.24 of LGTM Enterprise.
-
 .. index:: super
 .. _super:
 
@@ -151,7 +149,7 @@ Instead of overriding both definitions, it uses the definition from ``B``.
     
     class C extends A, B {
       // Need to define `int getANumber()`; otherwise it would be ambiguous
-      int getANumber() { 
+      override int getANumber() {
         result = B.super.getANumber()
       }
     }
@@ -340,8 +338,6 @@ The following aggregates are available in QL:
       from int x
       where x in [-5 .. 5] and x != 0
       select unique(int y | y = x or y = x.abs() | y)
-
-  The ``unique`` aggregate is supported from release 2.1.0 of the CodeQL CLI, and release 1.24 of LGTM Enterprise.
 
 Evaluation of aggregates
 ========================
@@ -561,7 +557,7 @@ for a given ``f``.
 In this query, oranges are available at two different prices, and the
 default ``sum`` aggregate returns a single line where Alice buys an
 orange at a price of 100, another orange at a price of 1, and an apple
-at a price of 100, totalling 201. On the other hand, in the the
+at a price of 100, totalling 201. On the other hand, in the 
 *monotonic* semantics for ``sum``, Alice always buys one orange and
 one apple, and a line of output is produced for each *way* she can
 complete her shopping list.
@@ -606,6 +602,7 @@ the distance of a node in a graph from the leaves as follows:
 
 .. code-block:: ql
 
+   language[monotonicAggregates]
    int depth(Node n) {
      if not exists(n.getAChild())
      then result = 0

@@ -282,10 +282,10 @@ class HashCons extends HCBase {
   }
 
   /** Gets a textual representation of this element. */
-  string toString() { result = exampleExpr().toString() }
+  string toString() { result = this.exampleExpr().toString() }
 
   /** Gets the primary location of this element. */
-  Location getLocation() { result = exampleExpr().getLocation() }
+  Location getLocation() { result = this.exampleExpr().getLocation() }
 }
 
 /**
@@ -372,7 +372,8 @@ private predicate analyzablePointerFieldAccess(PointerFieldAccess access) {
 private predicate mk_PointerFieldAccess(HashCons qualifier, Field target, PointerFieldAccess access) {
   analyzablePointerFieldAccess(access) and
   target = access.getTarget() and
-  qualifier = hashCons(access.getQualifier().getFullyConverted())
+  qualifier = hashCons(access.getQualifier().getFullyConverted()) and
+  not access instanceof ImplicitThisFieldAccess
 }
 
 private predicate analyzableImplicitThisFieldAccess(ImplicitThisFieldAccess access) {
@@ -475,9 +476,7 @@ private predicate mk_NonmemberFunctionCall(Function fcn, HC_Args args, FunctionC
   fc.getTarget() = fcn and
   analyzableNonmemberFunctionCall(fc) and
   (
-    exists(HashCons head, HC_Args tail |
-      mk_ArgConsInner(head, tail, fc.getNumberOfArguments() - 1, args, fc)
-    )
+    mk_ArgConsInner(_, _, fc.getNumberOfArguments() - 1, args, fc)
     or
     fc.getNumberOfArguments() = 0 and
     args = HC_EmptyArgs()
@@ -494,9 +493,7 @@ private predicate analyzableExprCall(ExprCall ec) {
 private predicate mk_ExprCall(HashCons hc, HC_Args args, ExprCall ec) {
   hc.getAnExpr() = ec.getExpr() and
   (
-    exists(HashCons head, HC_Args tail |
-      mk_ArgConsInner(head, tail, ec.getNumberOfArguments() - 1, args, ec)
-    )
+    mk_ArgConsInner(_, _, ec.getNumberOfArguments() - 1, args, ec)
     or
     ec.getNumberOfArguments() = 0 and
     args = HC_EmptyArgs()
@@ -516,9 +513,7 @@ private predicate mk_MemberFunctionCall(Function fcn, HashCons qual, HC_Args arg
   analyzableMemberFunctionCall(fc) and
   hashCons(fc.getQualifier().getFullyConverted()) = qual and
   (
-    exists(HashCons head, HC_Args tail |
-      mk_ArgConsInner(head, tail, fc.getNumberOfArguments() - 1, args, fc)
-    )
+    mk_ArgConsInner(_, _, fc.getNumberOfArguments() - 1, args, fc)
     or
     fc.getNumberOfArguments() = 0 and
     args = HC_EmptyArgs()
@@ -541,10 +536,8 @@ private predicate mk_ArgCons(HashCons hc, int i, HC_Args list, Call c) {
   analyzableCall(c) and
   hc = hashCons(c.getArgument(i).getFullyConverted()) and
   (
-    exists(HashCons head, HC_Args tail |
-      mk_ArgConsInner(head, tail, i - 1, list, c) and
-      i > 0
-    )
+    mk_ArgConsInner(_, _, i - 1, list, c) and
+    i > 0
     or
     i = 0 and
     list = HC_EmptyArgs()
@@ -749,7 +742,7 @@ private predicate mk_FieldCons(
   analyzableClassAggregateLiteral(cal) and
   cal.getUnspecifiedType() = c and
   exists(Expr e |
-    e = cal.getFieldExpr(f).getFullyConverted() and
+    e = cal.getAFieldExpr(f).getFullyConverted() and
     f.getInitializationOrder() = i and
     (
       hc = hashCons(e) and
@@ -765,9 +758,9 @@ private predicate mk_FieldCons(
 private predicate analyzableClassAggregateLiteral(ClassAggregateLiteral cal) {
   forall(int i | exists(cal.getChild(i)) |
     strictcount(cal.getChild(i).getFullyConverted()) = 1 and
-    strictcount(Field f | cal.getChild(i) = cal.getFieldExpr(f)) = 1 and
+    strictcount(Field f | cal.getChild(i) = cal.getAFieldExpr(f)) = 1 and
     strictcount(Field f, int j |
-      cal.getFieldExpr(f) = cal.getChild(i) and j = f.getInitializationOrder()
+      cal.getAFieldExpr(f) = cal.getChild(i) and j = f.getInitializationOrder()
     ) = 1
   )
 }

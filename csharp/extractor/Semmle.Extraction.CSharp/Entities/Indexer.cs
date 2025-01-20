@@ -1,7 +1,8 @@
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.IO;
 using System.Linq;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Semmle.Extraction.CSharp.Util;
 
 namespace Semmle.Extraction.CSharp.Entities
 {
@@ -50,6 +51,7 @@ namespace Semmle.Extraction.CSharp.Entities
                 }
             }
 
+            PopulateAttributes();
             PopulateModifiers(trapFile);
             BindComments();
 
@@ -92,7 +94,7 @@ namespace Semmle.Extraction.CSharp.Entities
                     .OfType<IndexerDeclarationSyntax>()
                     .Select(s => s.GetLocation())
                     .Concat(Symbol.Locations)
-                    .First();
+                    .Best();
             }
         }
 

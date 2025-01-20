@@ -92,13 +92,20 @@ class InvokeNode extends DataFlow::SourceNode instanceof DataFlow::Impl::InvokeN
    * but the position of `z` cannot be determined, hence there are no first and second
    * argument nodes.
    */
-  DataFlow::Node getArgument(int i) { result = super.getArgument(i) }
+  cached
+  DataFlow::Node getArgument(int i) {
+    result = super.getArgument(i) and Stages::DataFlowStage::ref()
+  }
 
   /** Gets the data flow node corresponding to an argument of this invocation. */
-  DataFlow::Node getAnArgument() { result = super.getAnArgument() }
+  cached
+  DataFlow::Node getAnArgument() { result = super.getAnArgument() and Stages::DataFlowStage::ref() }
 
   /** Gets the data flow node corresponding to the last argument of this invocation. */
-  DataFlow::Node getLastArgument() { result = this.getArgument(this.getNumArgument() - 1) }
+  cached
+  DataFlow::Node getLastArgument() {
+    result = this.getArgument(this.getNumArgument() - 1) and Stages::DataFlowStage::ref()
+  }
 
   /**
    * Gets a data flow node corresponding to an array of values being passed as
@@ -298,9 +305,7 @@ class MethodCallNode extends CallNode instanceof DataFlow::Impl::MethodCallNodeD
  * new Array(16)
  * ```
  */
-class NewNode extends InvokeNode {
-  NewNode() { this instanceof DataFlow::Impl::NewNodeDef }
-}
+class NewNode extends InvokeNode instanceof DataFlow::Impl::NewNodeDef { }
 
 /**
  * A data flow node corresponding to the `this` parameter in a function or `this` at the top-level.
@@ -1153,28 +1158,10 @@ module ClassNode {
     abstract FunctionNode getStaticMember(string name, MemberKind kind);
 
     /**
-     * DEPRECATED. Override `getStaticMember` instead.
-     *
-     * Gets the static method of this class with the given name.
-     */
-    cached
-    deprecated FunctionNode getStaticMethod(string name) { none() }
-
-    /**
      * Gets a static member of this class of the given kind.
      */
     cached
     abstract FunctionNode getAStaticMember(MemberKind kind);
-
-    /**
-     * DEPRECATED. Override `getAStaticMember` instead.
-     *
-     * Gets a static method of this class.
-     *
-     * The constructor is not considered a static method.
-     */
-    cached
-    deprecated FunctionNode getAStaticMethod() { none() }
 
     /**
      * Gets a dataflow node representing a class to be used as the super-class
@@ -1275,6 +1262,12 @@ module ClassNode {
     result.getFile() = f
   }
 
+  pragma[nomagic]
+  private DataFlow::NewNode getAnInstantiationInFile(string name, File f) {
+    result = AccessPath::getAReferenceTo(name).(DataFlow::LocalSourceNode).getAnInstantiation() and
+    result.getFile() = f
+  }
+
   /**
    * Gets a reference to the function `func`, where there exists a read/write of the "prototype" property on that reference.
    */
@@ -1286,7 +1279,7 @@ module ClassNode {
   }
 
   /**
-   * A function definition with prototype manipulation as a `ClassNode` instance.
+   * A function definition, targeted by a `new`-call or with prototype manipulation, seen as a `ClassNode` instance.
    */
   class FunctionStyleClass extends Range, DataFlow::ValueNode {
     override Function astNode;
@@ -1297,9 +1290,12 @@ module ClassNode {
       (
         exists(getAFunctionValueWithPrototype(function))
         or
-        exists(string name |
-          this = AccessPath::getAnAssignmentTo(name) and
+        function = any(NewNode new).getCalleeNode().analyze().getAValue()
+        or
+        exists(string name | this = AccessPath::getAnAssignmentTo(name) |
           exists(getAPrototypeReferenceInFile(name, this.getFile()))
+          or
+          exists(getAnInstantiationInFile(name, this.getFile()))
         )
       )
     }
@@ -1615,7 +1611,12 @@ class RegExpConstructorInvokeNode extends DataFlow::InvokeNode {
    * Gets the AST of the regular expression created here, provided that the
    * first argument is a string literal.
    */
-  RegExpTerm getRoot() { result = this.getArgument(0).asExpr().(StringLiteral).asRegExp() }
+  RegExpTerm getRoot() {
+    result = this.getArgument(0).asExpr().(StringLiteral).asRegExp()
+    or
+    // In case someone writes `new RegExp(/foo/)` for some reason
+    result = this.getArgument(0).asExpr().(RegExpLiteral).getRoot()
+  }
 
   /**
    * Gets the flags provided in the second argument, or an empty string if no
@@ -1689,6 +1690,9 @@ class RegExpCreationNode extends DataFlow::SourceNode {
   /** Holds if the constructed predicate has the `g` flag. */
   predicate isGlobal() { RegExp::isGlobal(this.getFlags()) }
 
+  /** Holds if the constructed predicate has the `g` flag or unknown flags. */
+  predicate maybeGlobal() { RegExp::maybeGlobal(this.tryGetFlags()) }
+
   /** Gets a data flow node referring to this regular expression. */
   private DataFlow::SourceNode getAReference(DataFlow::TypeTracker t) {
     t.start() and
@@ -1702,5 +1706,20 @@ class RegExpCreationNode extends DataFlow::SourceNode {
   DataFlow::SourceNode getAReference() {
     Stages::FlowSteps::ref() and
     result = this.getAReference(DataFlow::TypeTracker::end())
+  }
+}
+
+/**
+ * A guard node for a variable in a negative condition, such as `x` in `if(!x)`.
+ * Can be added to a `isBarrier` in a data-flow configuration to block flow through such checks.
+ */
+class VarAccessBarrier extends DataFlow::Node {
+  VarAccessBarrier() {
+    exists(ConditionGuardNode guard, SsaRefinementNode refinement |
+      this = DataFlow::ssaDefinitionNode(refinement) and
+      refinement.getGuard() = guard and
+      guard.getTest() instanceof VarAccess and
+      guard.getOutcome() = false
+    )
   }
 }
